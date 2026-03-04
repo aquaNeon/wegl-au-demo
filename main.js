@@ -1,4 +1,3 @@
-
 (function() {
   'use strict';
 
@@ -26,21 +25,21 @@
     }
 
     const CONFIG = {
-      particleCount:     attr('particle-count', 1200),
-      particleCountEnd:  attr('particle-count-end', 0),
+      particleCount:     attr('particle-count', 250),
+      particleCountEnd:  attr('particle-count-end', 3000),
       particleBaseMult:  attr('particle-size', 300),
       particleSquare:    attr('particle-square', 'false') === 'true',
       sphereRadiusStart: attr('sphere-start', 10),
-      sphereRadiusEnd:   attr('sphere-end', 4.5),
-      nodeRadiusStart:   attr('node-radius-start', 18),
+      sphereRadiusEnd:   attr('sphere-end', 5.5),
+      nodeRadiusStart:   attr('node-radius-start', 70),
       bgDark:            new THREE.Color(attr('bg-dark', '#0a1628')),
       bgLight:           new THREE.Color(attr('bg-light', '#ffffff')),
       goldPrimary:       new THREE.Color(attr('color-primary', '#F5A623')).getHex(),
       goldLight:         new THREE.Color(attr('color-light', '#FFD876')).getHex(),
-      lineOpacityMax:    attr('line-opacity', 0.45),
-      lineMaxActive:     attr('line-max', 5),
+      lineOpacityMax:    attr('line-opacity', 0.4),
+      lineMaxActive:     attr('line-max', 10),
       lineSeed:          attr('line-seed', 42),
-      rotationTurns:     attr('rotation-turns', 3.5),
+      rotationTurns:     attr('rotation-turns', 1.5),
       bgTrigger:         attr('bg-trigger', 0.12),
     };
 
