@@ -1,4 +1,3 @@
-
 (function() {
   'use strict';
 
@@ -58,11 +57,10 @@
     // Blue nodes:   data-nw-node-group="blue"
     const nodeEls = configEl.querySelectorAll('[data-nw="node"]');
     const nodeConfigs = Array.from(nodeEls).map(el => ({
-      color: el.getAttribute('data-nw-node-color') || null,
-      size:  parseFloat(el.getAttribute('data-nw-node-size')) || null,
-      image: el.querySelector('img')?.src || null,
-      type:  el.getAttribute('data-nw-node-type') || null,
-      group: el.getAttribute('data-nw-node-group') || 'yellow', // 'yellow' | 'blue'
+      size:    parseFloat(el.getAttribute('data-nw-node-size')) || null,
+      image:   el.querySelector('img')?.src || null,
+      type:    el.getAttribute('data-nw-node-type') || null,
+      group:   el.getAttribute('data-nw-node-group') || 'yellow',
       initial: el.getAttribute('data-nw-node-initial') === 'true',
     }));
     const NODE_COUNT = Math.max(nodeConfigs.length, 1);
@@ -139,8 +137,12 @@
     for (let i = 0; i < COUNT; i++) {
       const sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
       startPositions[i*3]   = sp.x; startPositions[i*3+1] = sp.y; startPositions[i*3+2] = sp.z;
+      // End state: flat galaxy ring — same radius as sphere but squashed on Y
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
-      endPositions[i*3]     = ep.x; endPositions[i*3+1]   = ep.y; endPositions[i*3+2]   = ep.z;
+      // Keep X/Z radius, just squash Y to make it flat
+      endPositions[i*3]   = ep.x;
+      endPositions[i*3+1] = ep.y * attr('end-scale-y', 0.25);
+      endPositions[i*3+2] = ep.z;
       particleSizes[i]      = 0.08 + Math.random() * 0.25;
       particleRandom[i]     = Math.random();
     }
@@ -271,7 +273,9 @@
       const sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
       blueStartPos[i*3]   = sp.x; blueStartPos[i*3+1] = sp.y; blueStartPos[i*3+2] = sp.z;
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
-      blueEndPos[i*3]     = ep.x; blueEndPos[i*3+1]   = ep.y; blueEndPos[i*3+2]   = ep.z;
+      blueEndPos[i*3]   = ep.x;
+      blueEndPos[i*3+1] = ep.y * attr('end-scale-y', 0.25);
+      blueEndPos[i*3+2] = ep.z;
       blueSizes[i]        = 0.12 + Math.random() * 0.32; // larger than yellow (yellow is 0.08–0.33)
       blueRandom[i]       = Math.random();
     }
@@ -394,10 +398,10 @@
       const isBlue   = nc.group === 'blue';
       const isInitial = nc.initial === true;
 
-      const defaultColor = isBlue
+      // Color always comes from group — yellow or blue. No hex needed in Webflow.
+      const color = isBlue
         ? new THREE.Color(CONFIG.bluePrimary)
         : new THREE.Color(CONFIG.goldPrimary);
-      const color = nc.color ? new THREE.Color(nc.color) : defaultColor;
 
       let size = nc.size ? 0.18 + (nc.size / 10) * 0.6 : 0.18 + rng() * 0.3;
       const hasImage = nc.image && !nc.image.includes('placeholder');
@@ -452,7 +456,14 @@
           (rng() - 0.5) * startR * 0.25
         );
       }
-      const ep = randomOnSphereSurface(CONFIG.sphereRadiusEnd * 1.1, 0.8);
+      // End state: spread nodes across the full flat disc, not just sphere surface
+      const angle2 = Math.random() * Math.PI * 2;
+      const radius2 = CONFIG.sphereRadiusEnd * (0.3 + Math.random() * 0.85);
+      const ep = new THREE.Vector3(
+        Math.cos(angle2) * radius2,
+        (Math.random() - 0.5) * CONFIG.sphereRadiusEnd * attr('end-scale-y', 0.25) * 2,
+        Math.sin(angle2) * radius2 * (0.6 + Math.random() * 0.5)
+      );
 
       mesh.userData = {
         startPos:   sp,
@@ -527,69 +538,50 @@
     const blueSourceCount = lineConnections.filter(c => nodes[c.a].userData.isBlue).length;
     console.log('[NW] lines with blue source:', blueSourceCount, '/', TOTAL_LINES);
 
-    // Per line: 2 verts. aPulsePhase 0→1 along line (interpolated = position along segment)
-    // aPulseOffset: unique per-line time offset
-    // aGroup: 0=yellow src, 1=blue src, 2=cross
+    // Per line: 2 verts.
     const lineGeo = new THREE.BufferGeometry();
-    lineGeo.setAttribute('position',    new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 6), 3));
-    lineGeo.setAttribute('aLineAlpha',  new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
-    lineGeo.setAttribute('aPulsePhase', new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
-    lineGeo.setAttribute('aPulseOffset',new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
-    lineGeo.setAttribute('aGroup',      new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
+    lineGeo.setAttribute('position',     new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 6), 3));
+    lineGeo.setAttribute('aLineAlpha',   new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
+    lineGeo.setAttribute('aPulsePhase',  new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
+    lineGeo.setAttribute('aPulseOffset', new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
+    // Signal color read from nodeA's actual material color — vec3 RGB per vertex
+    lineGeo.setAttribute('aSignalColor', new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 6), 3));
 
     const lineMat = new THREE.ShaderMaterial({
       vertexShader: `
         attribute float aLineAlpha;
         attribute float aPulsePhase;
         attribute float aPulseOffset;
-        attribute float aGroup;
+        attribute vec3  aSignalColor;
         varying float vAlpha;
         varying float vPhase;
         varying float vOffset;
-        varying float vGroup;
+        varying vec3  vSignalColor;
         void main() {
-          vAlpha  = aLineAlpha;
-          vPhase  = aPulsePhase;
-          vOffset = aPulseOffset;
-          vGroup  = aGroup;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vAlpha       = aLineAlpha;
+          vPhase       = aPulsePhase;
+          vOffset      = aPulseOffset;
+          vSignalColor = aSignalColor;
+          gl_Position  = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
         uniform float uGlobalAlpha;
         uniform float uTime;
-        uniform vec3  uColorYellow;
-        uniform vec3  uColorBlue;
         varying float vAlpha;
         varying float vPhase;
         varying float vOffset;
-        varying float vGroup;
+        varying vec3  vSignalColor;
         void main() {
-          // Grey base line
           vec3 baseCol = vec3(0.55, 0.55, 0.55);
 
-          // Signal color from source node
-          vec3 sigCol;
-          if      (vGroup < 0.5) sigCol = uColorYellow;
-          else if (vGroup < 1.5) sigCol = uColorBlue;
-          else                   sigCol = mix(uColorYellow, uColorBlue, 0.5);
-
-          // Pulse position: travels 0→1 along line, wraps
-          float pos = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
-
-          // Gaussian envelope — tighter pulse (higher number = shorter signal)
+          float pos  = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
           float env  = exp(-pow((vPhase - pos) * 14.0, 2.0));
-
-          // Fade near endpoints so signal doesn't overlap nodes
           float ends = smoothstep(0.0, 0.06, vPhase) * smoothstep(1.0, 0.94, vPhase);
-
-          // Base line alpha
           float baseA = vAlpha * ends * 0.4;
 
-          // Signal boosted on top of base line
-          vec3  col = mix(baseCol, sigCol, clamp(env * 3.0, 0.0, 1.0));
+          vec3  col = mix(baseCol, vSignalColor, clamp(env * 3.0, 0.0, 1.0));
           float a   = clamp(baseA + env * 0.95, 0.0, 1.0) * uGlobalAlpha;
-
           gl_FragColor = vec4(col, a);
         }
       `,
@@ -597,8 +589,6 @@
       uniforms: {
         uGlobalAlpha: { value: 0 },
         uTime:        { value: 0 },
-        uColorYellow: { value: new THREE.Color(CONFIG.goldPrimary) },
-        uColorBlue:   { value: new THREE.Color(CONFIG.bluePrimary) },
       },
     });
 
@@ -611,19 +601,20 @@
       pulseOffset: Math.random(),
     }));
 
-    // Write static attributes
+    // Write static attributes — read signal color directly from nodeA's material
+    const sigColorAttr = lineGeo.getAttribute('aSignalColor');
     for (let c = 0; c < TOTAL_LINES; c++) {
-      // aGroup = source node color (nodeA), not line group
-      const srcIsBlue = nodes[lineConnections[c].a].userData.isBlue;
-      const gv  = srcIsBlue ? 1 : 0;
       const po  = lineStates[c].pulseOffset;
-      lineGeo.getAttribute('aGroup').setX(c*2, gv);       lineGeo.getAttribute('aGroup').setX(c*2+1, gv);
-      lineGeo.getAttribute('aPulseOffset').setX(c*2, po);  lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
-      lineGeo.getAttribute('aPulsePhase').setX(c*2, 0.0);  lineGeo.getAttribute('aPulsePhase').setX(c*2+1, 1.0);
+      const col = nodes[lineConnections[c].a].material.uniforms.uColor.value;
+      // Both verts of this line get same signal color and offset
+      sigColorAttr.setXYZ(c*2,   col.r, col.g, col.b);
+      sigColorAttr.setXYZ(c*2+1, col.r, col.g, col.b);
+      lineGeo.getAttribute('aPulseOffset').setX(c*2,    po); lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
+      lineGeo.getAttribute('aPulsePhase').setX(c*2,  0.0);   lineGeo.getAttribute('aPulsePhase').setX(c*2+1, 1.0);
     }
-    lineGeo.getAttribute('aGroup').needsUpdate       = true;
-    lineGeo.getAttribute('aPulseOffset').needsUpdate = true;
-    lineGeo.getAttribute('aPulsePhase').needsUpdate  = true;
+    sigColorAttr.needsUpdate                             = true;
+    lineGeo.getAttribute('aPulseOffset').needsUpdate     = true;
+    lineGeo.getAttribute('aPulsePhase').needsUpdate      = true;
 
     const logoCircleGeo = new THREE.CircleGeometry(0.55, 256);
     const logoCircleMat = new THREE.ShaderMaterial({
@@ -863,25 +854,18 @@
         n.quaternion.copy(camera.quaternion.clone().premultiply(quat.clone().invert()));
       }
 
-      /* Lines */
-      // Yellow lines: fade in at ~0.3, stay
-      // Blue lines & cross: fade in at ~0.45
-      const yellowGA = smoothstep(0.30, 0.42, p) * CONFIG.lineOpacityMax;
-      const blueGA   = smoothstep(0.44, 0.56, p) * CONFIG.lineOpacityMax;
-      const crossGA  = smoothstep(0.50, 0.62, p) * CONFIG.lineOpacityMax;
+      /* Lines — three clear stages:
+         1. Yellow nodes arrive (~0.02–0.20) → yellow-yellow lines fade in
+         2. Blue nodes arrive  (~0.28–0.46) → blue-blue lines fade in
+         3. Cross connections last           → yellow↔blue lines fade in      */
+      const yellowGA = smoothstep(0.28, 0.40, p) * CONFIG.lineOpacityMax;
+      const blueGA   = smoothstep(0.54, 0.66, p) * CONFIG.lineOpacityMax;
+      const crossGA  = smoothstep(0.72, 0.82, p) * CONFIG.lineOpacityMax;
 
       // Pass a single uGlobalAlpha for the whole mesh — per-line alpha is handled via aLineAlpha
       // We encode group-specific global alpha into aLineAlpha instead
       lineMat.uniforms.uGlobalAlpha.value = 1.0;
       lineMat.uniforms.uTime.value = time;
-
-      if (isDark) {
-        lineMat.uniforms.uColorYellow.value.setHex(CONFIG.goldLight);
-        lineMat.uniforms.uColorBlue.value.setHex(CONFIG.blueLight);
-      } else {
-        lineMat.uniforms.uColorYellow.value.setHex(CONFIG.goldPrimary);
-        lineMat.uniforms.uColorBlue.value.setHex(CONFIG.bluePrimary);
-      }
       const lPos         = lineGeo.getAttribute('position');
       const lAlpha       = lineGeo.getAttribute('aLineAlpha');
       let alive = lineStates.filter(s => s.alive).length;
@@ -899,8 +883,8 @@
                       : conn.group === 'blue'   ? blueGA
                       : crossGA;
 
-        const aVis = nodeA.userData.currentScale > 0.3;
-        const bVis = nodeB.userData.currentScale > 0.3;
+        const aVis = nodeA.userData.currentScale > 0.95 && p > nodeA.userData.arriveAt;
+        const bVis = nodeB.userData.currentScale > 0.95 && p > nodeB.userData.arriveAt;
         const ok   = aVis && bVis && groupGA > 0.01;
 
         if (st.alive) {
