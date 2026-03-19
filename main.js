@@ -1,3 +1,4 @@
+
 (function() {
   'use strict';
 
@@ -676,10 +677,9 @@
       mouse.screen.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       mouse.isOver = true;
       if (drag.active) {
-        const dx = e.clientX - drag.lastX, dy = e.clientY - drag.lastY;
-        drag.velocityX = dx * 0.003; drag.velocityY = dy * 0.003;
+        const dx = e.clientX - drag.lastX;
+        drag.velocityX = dx * 0.003;
         drag.rotationY += dx * 0.003;
-        drag.rotationX = Math.max(-0.8, Math.min(0.8, drag.rotationX + dy * 0.002));
         drag.lastX = e.clientX; drag.lastY = e.clientY;
       }
     });
@@ -694,10 +694,9 @@
     }, { passive: true });
     canvas.addEventListener('touchmove', (e) => {
       if (drag.active && e.touches.length === 1) {
-        const dx = e.touches[0].clientX - drag.lastX, dy = e.touches[0].clientY - drag.lastY;
-        drag.velocityX = dx * 0.003; drag.velocityY = dy * 0.003;
+        const dx = e.touches[0].clientX - drag.lastX;
+        drag.velocityX = dx * 0.003;
         drag.rotationY += dx * 0.003;
-        drag.rotationX = Math.max(-0.8, Math.min(0.8, drag.rotationX + dy * 0.002));
         drag.lastX = e.touches[0].clientX; drag.lastY = e.touches[0].clientY;
       }
     }, { passive: true });
@@ -754,11 +753,10 @@
       /* Rotation */
       const autoRotY = p * Math.PI * 2 * CONFIG.rotationTurns;
       if (!drag.active) {
-        drag.velocityX *= 0.95; drag.velocityY *= 0.95;
+        drag.velocityX *= 0.95;
         drag.rotationY += drag.velocityX;
-        drag.rotationX = Math.max(-0.8, Math.min(0.8, drag.rotationX + drag.velocityY));
       }
-      const euler = new THREE.Euler(drag.rotationX, autoRotY + drag.rotationY, 0, 'YXZ');
+      const euler = new THREE.Euler(0, autoRotY + drag.rotationY, 0, 'YXZ');
       const quat  = new THREE.Quaternion().setFromEuler(euler);
       particles.quaternion.copy(quat);
       blueParticles.quaternion.copy(quat);
