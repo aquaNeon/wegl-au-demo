@@ -458,11 +458,12 @@
         );
       }
       // End state: spread nodes across the full flat disc, not just sphere surface
+      const endFlatY = attr('node-end-scale-y', 0.15);
       const angle2 = Math.random() * Math.PI * 2;
       const radius2 = CONFIG.sphereRadiusEnd * (0.3 + Math.random() * 0.85);
       const ep = new THREE.Vector3(
         Math.cos(angle2) * radius2,
-        (Math.random() - 0.5) * CONFIG.sphereRadiusEnd * attr('end-scale-y', 0.25) * 2,
+        (Math.random() - 0.5) * CONFIG.sphereRadiusEnd * endFlatY * 2,
         Math.sin(angle2) * radius2 * (0.6 + Math.random() * 0.5)
       );
 
