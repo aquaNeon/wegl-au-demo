@@ -9,14 +9,12 @@
   }
 
   function init() {
-    const canvas = document.querySelector('[data-nw="canvas"]');
-    const configEl = document.querySelector('[data-nw="config"]');
+    const canvas     = document.querySelector('[data-nw="canvas"]');
+    const configEl   = document.querySelector('[data-nw="config"]');
     const canvasWrap = document.querySelector('[data-nw="canvas-wrap"]') || canvas?.parentElement;
-    const debugEl = document.querySelector('[data-nw="debug"]');
+    const debugEl    = document.querySelector('[data-nw="debug"]');
 
     if (!canvas || !configEl) return;
-
-    /* ── Config ── */
 
     function attr(name, fallback) {
       const val = configEl.getAttribute('data-nw-' + name);
@@ -26,36 +24,27 @@
     }
 
     const CONFIG = {
-      particleCount:        attr('particle-count', 200),
-      particleCountEnd:     attr('particle-count-end', 2500),
-      particleBaseMult:     attr('particle-size', 300),
-      particleSquare:       attr('particle-square', 'false') === 'true',
-      sphereRadiusStart:    attr('sphere-start', 10),
-      sphereRadiusEnd:      attr('sphere-end', 5.5),
-      nodeRadiusStart:      attr('node-radius-start', 70),
-      bgDark:               new THREE.Color(attr('bg-dark', '#0a1628')),
-      bgLight:              new THREE.Color(attr('bg-light', '#ffffff')),
-      goldPrimary:          new THREE.Color(attr('color-primary', '#F5A623')).getHex(),
-      goldLight:            new THREE.Color(attr('color-light', '#FFD876')).getHex(),
-      bluePrimary:          new THREE.Color(attr('color-blue', '#3A8FFF')).getHex(),
-      blueLight:            new THREE.Color(attr('color-blue-light', '#80C4FF')).getHex(),
-      lineOpacityMax:       attr('line-opacity', 0.9),
-      lineMaxActive:        attr('line-max', 20),
-      lineSeed:             attr('line-seed', 42),
-      rotationTurns:        attr('rotation-turns', 1.5),
-      bgTrigger:            attr('bg-trigger', 0.12),
-      // Scroll thresholds for staged intro
-      // 0–0.3  yellow nodes appear
-      // 0.3–0.5 blue nodes appear
-      // 0.35+  yellow lines connect
-      // 0.5+   blue lines connect, cross connections
-      // NO absorption — sphere just condenses
-      yellowIntroStart:     attr('yellow-intro-start', 0.02),
-      blueIntroStart:       attr('blue-intro-start', 0.28),
+      particleCount:     attr('particle-count', 200),
+      particleCountEnd:  attr('particle-count-end', 2500),
+      particleBaseMult:  attr('particle-size', 300),
+      particleSquare:    attr('particle-square', 'false') === 'true',
+      sphereRadiusStart: attr('sphere-start', 10),
+      sphereRadiusEnd:   attr('sphere-end', 5.5),
+      nodeRadiusStart:   attr('node-radius-start', 70),
+      bgDark:            new THREE.Color(attr('bg-dark', '#0a1628')),
+      bgLight:           new THREE.Color(attr('bg-light', '#ffffff')),
+      goldPrimary:       new THREE.Color(attr('color-primary', '#F5A623')).getHex(),
+      goldLight:         new THREE.Color(attr('color-light', '#FFD876')).getHex(),
+      bluePrimary:       new THREE.Color(attr('color-blue', '#4ABAFE')).getHex(),
+      lineOpacityMax:    attr('line-opacity', 0.9),
+      lineMaxActive:     attr('line-max', 20),
+      lineSeed:          attr('line-seed', 42),
+      rotationTurns:     attr('rotation-turns', 1.5),
+      bgTrigger:         attr('bg-trigger', 0.12),
+      yellowIntroStart:  attr('yellow-intro-start', 0.02),
+      blueIntroStart:    attr('blue-intro-start', 0.28),
     };
 
-    // Yellow nodes: data-nw-node-group="yellow" (or omit, default is yellow)
-    // Blue nodes:   data-nw-node-group="blue"
     const nodeEls = configEl.querySelectorAll('[data-nw="node"]');
     const nodeConfigs = Array.from(nodeEls).map(el => ({
       size:    parseFloat(el.getAttribute('data-nw-node-size')) || null,
@@ -91,28 +80,16 @@
     }
     const rng  = mulberry32(CONFIG.lineSeed);
     const rng2 = mulberry32(CONFIG.lineSeed + 100);
-    const rng3 = mulberry32(CONFIG.lineSeed + 200); // for blue lines
+    const rng3 = mulberry32(CONFIG.lineSeed + 200);
 
     /* ── Helpers ── */
 
     function randomInSphere(radius, thickness) {
       const u = Math.random(), v = Math.random(), w = Math.random();
       const theta = 2 * Math.PI * u;
-      const phi = Math.acos(2 * v - 1);
-      const minR = radius * (1 - thickness);
-      const r = minR + (radius - minR) * Math.cbrt(w);
-      return new THREE.Vector3(
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.sin(phi) * Math.sin(theta),
-        r * Math.cos(phi)
-      );
-    }
-
-    function randomOnSphereSurface(radius, jitter) {
-      const u = Math.random(), v = Math.random();
-      const theta = 2 * Math.PI * u;
-      const phi = Math.acos(2 * v - 1);
-      const r = radius + (Math.random() - 0.5) * jitter;
+      const phi   = Math.acos(2 * v - 1);
+      const minR  = radius * (1 - thickness);
+      const r     = minR + (radius - minR) * Math.cbrt(w);
       return new THREE.Vector3(
         r * Math.sin(phi) * Math.cos(theta),
         r * Math.sin(phi) * Math.sin(theta),
@@ -129,7 +106,8 @@
 
     /* ── Particles ── */
 
-    const COUNT = Math.max(CONFIG.particleCount, CONFIG.particleCountEnd || CONFIG.particleCount);
+    const COUNT      = Math.max(CONFIG.particleCount, CONFIG.particleCountEnd || CONFIG.particleCount);
+    const endScaleY  = attr('end-scale-y', 0.25);
     const startPositions = new Float32Array(COUNT * 3);
     const endPositions   = new Float32Array(COUNT * 3);
     const particleSizes  = new Float32Array(COUNT);
@@ -138,18 +116,16 @@
     for (let i = 0; i < COUNT; i++) {
       const sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
       startPositions[i*3]   = sp.x; startPositions[i*3+1] = sp.y; startPositions[i*3+2] = sp.z;
-      // End state: flat galaxy ring — same radius as sphere but squashed on Y
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
-      // Keep X/Z radius, just squash Y to make it flat
       endPositions[i*3]   = ep.x;
-      endPositions[i*3+1] = ep.y * attr('end-scale-y', 0.25);
+      endPositions[i*3+1] = ep.y * endScaleY;
       endPositions[i*3+2] = ep.z;
-      particleSizes[i]      = 0.08 + Math.random() * 0.25;
-      particleRandom[i]     = Math.random();
+      particleSizes[i]  = 0.08 + Math.random() * 0.25;
+      particleRandom[i] = Math.random();
     }
 
     const particleGeo = new THREE.BufferGeometry();
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3));
+    particleGeo.setAttribute('position',  new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3));
     particleGeo.setAttribute('aStartPos', new THREE.BufferAttribute(startPositions, 3));
     particleGeo.setAttribute('aEndPos',   new THREE.BufferAttribute(endPositions, 3));
     particleGeo.setAttribute('aSize',     new THREE.BufferAttribute(particleSizes, 1));
@@ -240,7 +216,7 @@
     `;
 
     const particleMat = new THREE.ShaderMaterial({
-      vertexShader: CONFIG.particleSquare ? particleVert : particleVert,
+      vertexShader: particleVert,
       fragmentShader: CONFIG.particleSquare ? particleFragSquare : particleFragCircle,
       transparent: true, depthWrite: false, depthTest: true,
       blending: THREE.AdditiveBlending,
@@ -261,10 +237,8 @@
     scene.add(particles);
 
     /* ── Blue Particles ── */
-    // Separate particle cloud, same sphere geometry but blue colors
-    // Fades in at the same scroll point as blue nodes
 
-    const BLUE_COUNT = Math.round(COUNT * attr('blue-particle-ratio', 0.4));
+    const BLUE_COUNT   = Math.round(COUNT * attr('blue-particle-ratio', 0.4));
     const blueStartPos = new Float32Array(BLUE_COUNT * 3);
     const blueEndPos   = new Float32Array(BLUE_COUNT * 3);
     const blueSizes    = new Float32Array(BLUE_COUNT);
@@ -275,14 +249,14 @@
       blueStartPos[i*3]   = sp.x; blueStartPos[i*3+1] = sp.y; blueStartPos[i*3+2] = sp.z;
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
       blueEndPos[i*3]   = ep.x;
-      blueEndPos[i*3+1] = ep.y * attr('end-scale-y', 0.25);
+      blueEndPos[i*3+1] = ep.y * endScaleY;
       blueEndPos[i*3+2] = ep.z;
-      blueSizes[i]        = 0.12 + Math.random() * 0.32; // larger than yellow (yellow is 0.08–0.33)
-      blueRandom[i]       = Math.random();
+      blueSizes[i]  = 0.12 + Math.random() * 0.32;
+      blueRandom[i] = Math.random();
     }
 
     const blueGeo = new THREE.BufferGeometry();
-    blueGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BLUE_COUNT * 3), 3));
+    blueGeo.setAttribute('position',  new THREE.BufferAttribute(new Float32Array(BLUE_COUNT * 3), 3));
     blueGeo.setAttribute('aStartPos', new THREE.BufferAttribute(blueStartPos, 3));
     blueGeo.setAttribute('aEndPos',   new THREE.BufferAttribute(blueEndPos, 3));
     blueGeo.setAttribute('aSize',     new THREE.BufferAttribute(blueSizes, 1));
@@ -299,10 +273,10 @@
         uPixelRatio:     { value: renderer.getPixelRatio() },
         uBaseMult:       { value: CONFIG.particleBaseMult },
         uColorInner:     { value: new THREE.Color(CONFIG.bluePrimary) },
-        uColorOuter:     { value: new THREE.Color(CONFIG.blueLight) },
+        uColorOuter:     { value: new THREE.Color(CONFIG.bluePrimary) },
         uMouse3D:        { value: new THREE.Vector3(100, 100, 0) },
         uMouseInfluence: { value: 0 },
-        uVisibility:     { value: 0 }, // starts hidden, fades in with scroll
+        uVisibility:     { value: 0 },
       }
     });
 
@@ -311,7 +285,7 @@
 
     /* ── Nodes ── */
 
-    const nodes = [];
+    const nodes     = [];
     const nodeGroup = new THREE.Group();
     scene.add(nodeGroup);
 
@@ -336,8 +310,7 @@
         if (uAspect > 1.0) { imgUv.x /= uAspect; } else { imgUv.y *= uAspect; }
         imgUv += 0.5;
         float borderOuter = 0.36, borderInner = 0.33;
-        float border = smoothstep(borderInner - 0.005, borderInner, dist)
-                      * (1.0 - smoothstep(borderOuter, borderOuter + 0.005, dist));
+        float border  = smoothstep(borderInner - 0.005, borderInner, dist) * (1.0 - smoothstep(borderOuter, borderOuter + 0.005, dist));
         float imgMask = 1.0 - smoothstep(borderInner - 0.005, borderInner, dist);
         vec4 img = texture2D(uTexture, imgUv);
         float halo = pow(1.0 - smoothstep(0.0, 0.5, dist), 5.0) * 0.1;
@@ -361,11 +334,11 @@
         float p1T = clamp(cycle * 2.5, 0.0, 1.0);
         float p1R = 0.14 + p1T * 0.35;
         float p1A = (1.0 - p1T) * 0.35 * step(cycle, 0.5);
-        float p1 = smoothstep(p1R - 0.04, p1R - 0.01, dist) * (1.0 - smoothstep(p1R + 0.01, p1R + 0.04, dist));
+        float p1  = smoothstep(p1R - 0.04, p1R - 0.01, dist) * (1.0 - smoothstep(p1R + 0.01, p1R + 0.04, dist));
         float p2T = clamp((cycle - 0.075) * 2.5, 0.0, 1.0);
         float p2R = 0.14 + p2T * 0.28;
         float p2A = (1.0 - p2T) * 0.28 * step(cycle, 0.5);
-        float p2 = smoothstep(p2R - 0.03, p2R - 0.01, dist) * (1.0 - smoothstep(p2R + 0.01, p2R + 0.03, dist));
+        float p2  = smoothstep(p2R - 0.03, p2R - 0.01, dist) * (1.0 - smoothstep(p2R + 0.01, p2R + 0.03, dist));
         float alpha = (inner * 0.5 + p1 * p1A + p2 * p2A) * uOpacity;
         if (dist > 0.5) discard;
         gl_FragColor = vec4(uColor, alpha);
@@ -377,10 +350,10 @@
       uniform vec3 uColor;
       varying vec2 vUv;
       void main() {
-        float dist = length(vUv - 0.5);
+        float dist   = length(vUv - 0.5);
         float circle = 1.0 - smoothstep(0.30, 0.33, dist);
-        float halo = pow(1.0 - smoothstep(0.0, 0.5, dist), 5.0) * 0.08;
-        float alpha = (circle * 0.8 + halo) * uOpacity;
+        float halo   = pow(1.0 - smoothstep(0.0, 0.5, dist), 5.0) * 0.08;
+        float alpha  = (circle * 0.8 + halo) * uOpacity;
         if (dist > 0.5) discard;
         gl_FragColor = vec4(uColor, alpha);
       }
@@ -389,24 +362,20 @@
     const textureLoader = new THREE.TextureLoader();
     textureLoader.crossOrigin = 'anonymous';
 
-    // Split nodes by group for staggered intro
     let yellowIdx = 0, blueIdx = 0;
-    const yellowNodes = nodeConfigs.filter(n => n.group !== 'blue');
-    const blueNodes   = nodeConfigs.filter(n => n.group === 'blue');
+    const yellowNodes   = nodeConfigs.filter(n => n.group !== 'blue');
+    const blueNodes     = nodeConfigs.filter(n => n.group === 'blue');
+    const nodeEndScaleY = attr('node-end-scale-y', 0.15);
 
     for (let i = 0; i < NODE_COUNT; i++) {
-      const nc = nodeConfigs[i] || {};
-      const isBlue   = nc.group === 'blue';
+      const nc        = nodeConfigs[i] || {};
+      const isBlue    = nc.group === 'blue';
       const isInitial = nc.initial === true;
+      const color     = isBlue ? new THREE.Color(CONFIG.bluePrimary) : new THREE.Color(CONFIG.goldPrimary);
 
-      // Color always comes from group — yellow or blue. No hex needed in Webflow.
-      const color = isBlue
-        ? new THREE.Color(CONFIG.bluePrimary)
-        : new THREE.Color(CONFIG.goldPrimary);
-
-      let size = nc.size ? 0.18 + (nc.size / 10) * 0.6 : 0.18 + rng() * 0.3;
+      let size       = nc.size ? 0.18 + (nc.size / 10) * 0.6 : 0.18 + rng() * 0.3;
       const hasImage = nc.image && !nc.image.includes('placeholder');
-      const type = hasImage ? 'image' : (nc.type || 'target');
+      const type     = hasImage ? 'image' : (nc.type || 'target');
       const planeGeo = new THREE.PlaneGeometry(size * 2.2, size * 2.2);
       let mat;
 
@@ -436,10 +405,7 @@
         });
       }
 
-      const mesh = new THREE.Mesh(planeGeo, mat);
-
-      // Stagger entry based on group
-      // Blue nodes get their own index within blue group for staggering
+      const mesh      = new THREE.Mesh(planeGeo, mat);
       const groupIdx  = isBlue ? blueIdx++ : yellowIdx++;
       const groupSize = isBlue ? blueNodes.length : yellowNodes.length;
       const introBase = isBlue ? CONFIG.blueIntroStart : CONFIG.yellowIntroStart;
@@ -449,7 +415,7 @@
       if (isInitial) {
         sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
       } else {
-        const angle = (i / NODE_COUNT) * Math.PI * 2 + rng() * 0.5;
+        const angle  = (i / NODE_COUNT) * Math.PI * 2 + rng() * 0.5;
         const startR = CONFIG.nodeRadiusStart;
         sp = new THREE.Vector3(
           Math.cos(angle) * startR * (1.0 + rng() * 0.4),
@@ -457,26 +423,20 @@
           (rng() - 0.5) * startR * 0.25
         );
       }
-      // End state: spread nodes across the full flat disc, not just sphere surface
-      const endFlatY = attr('node-end-scale-y', 0.15);
-      const angle2 = Math.random() * Math.PI * 2;
+
+      const angle2  = Math.random() * Math.PI * 2;
       const radius2 = CONFIG.sphereRadiusEnd * (0.3 + Math.random() * 0.85);
       const ep = new THREE.Vector3(
         Math.cos(angle2) * radius2,
-        (Math.random() - 0.5) * CONFIG.sphereRadiusEnd * endFlatY * 2,
+        (Math.random() - 0.5) * CONFIG.sphereRadiusEnd * nodeEndScaleY * 2,
         Math.sin(angle2) * radius2 * (0.6 + Math.random() * 0.5)
       );
 
       mesh.userData = {
-        startPos:   sp,
-        endPos:     ep,
-        size,
-        rand:       rng(),
-        isInitial,
-        isBlue,
-        entranceAt: isInitial ? 0 : introBase + stagger,
-        arriveAt:   isInitial ? 0.25 : introBase + stagger + 0.18,
-        // NO absorb — nodes stay. Sphere just condenses.
+        startPos: sp, endPos: ep, size,
+        rand: rng(), isInitial, isBlue,
+        entranceAt:   isInitial ? 0    : introBase + stagger,
+        arriveAt:     isInitial ? 0.25 : introBase + stagger + 0.18,
         currentScale: 0,
       };
 
@@ -488,10 +448,8 @@
     /* ── Lines ── */
 
     const lineConnections = [];
-
-    const yellowIndices = nodes.map((n, i) => !n.userData.isBlue ? i : -1).filter(i => i >= 0);
-    const blueIndices   = nodes.map((n, i) =>  n.userData.isBlue ? i : -1).filter(i => i >= 0);
-    // If no blue nodes, all nodes connect as yellow
+    const yellowIndices   = nodes.map((n, i) => !n.userData.isBlue ? i : -1).filter(i => i >= 0);
+    const blueIndices     = nodes.map((n, i) =>  n.userData.isBlue ? i : -1).filter(i => i >= 0);
     const srcYellow = yellowIndices.length > 0 ? yellowIndices : nodes.map((_, i) => i);
     const srcBlue   = blueIndices;
 
@@ -518,7 +476,7 @@
 
     if (srcYellow.length > 0 && srcBlue.length > 0) {
       const crossCount = Math.min(Math.floor(Math.min(srcYellow.length, srcBlue.length) * 0.5), 5);
-      const usedCross = new Set();
+      const usedCross  = new Set();
       for (let c = 0; c < crossCount; c++) {
         let ai, bi, key, attempts = 0;
         do {
@@ -536,17 +494,11 @@
 
     const TOTAL_LINES = lineConnections.length;
 
-    console.log('[NW] nodes:', NODE_COUNT, 'yellow:', srcYellow.length, 'blue:', srcBlue.length, 'lineConnections:', TOTAL_LINES);
-    const blueSourceCount = lineConnections.filter(c => nodes[c.a].userData.isBlue).length;
-    console.log('[NW] lines with blue source:', blueSourceCount, '/', TOTAL_LINES);
-
-    // Per line: 2 verts.
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute('position',     new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 6), 3));
     lineGeo.setAttribute('aLineAlpha',   new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
     lineGeo.setAttribute('aPulsePhase',  new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
     lineGeo.setAttribute('aPulseOffset', new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 2), 1));
-    // Signal color read from nodeA's actual material color — vec3 RGB per vertex
     lineGeo.setAttribute('aSignalColor', new THREE.BufferAttribute(new Float32Array(TOTAL_LINES * 6), 3));
 
     const lineMat = new THREE.ShaderMaterial({
@@ -575,16 +527,13 @@
         varying float vOffset;
         varying vec3  vSignalColor;
         void main() {
-          vec3 baseCol = vec3(0.55, 0.55, 0.55);
-
-          float pos  = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
-          float env  = exp(-pow((vPhase - pos) * 14.0, 2.0));
-          float ends = smoothstep(0.0, 0.06, vPhase) * smoothstep(1.0, 0.94, vPhase);
-          float baseA = vAlpha * ends * 0.4;
-
-          vec3  col = mix(baseCol, vSignalColor, clamp(env * 3.0, 0.0, 1.0));
-          float a   = clamp(baseA + env * 0.95, 0.0, 1.0) * uGlobalAlpha;
-          gl_FragColor = vec4(col, a);
+          vec3  baseCol = vec3(0.55, 0.55, 0.55);
+          float pos     = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
+          float env     = exp(-pow((vPhase - pos) * 14.0, 2.0));
+          float ends    = smoothstep(0.0, 0.06, vPhase) * smoothstep(1.0, 0.94, vPhase);
+          vec3  col     = mix(baseCol, vSignalColor, clamp(env * 3.0, 0.0, 1.0));
+          float a       = clamp(vAlpha * ends * 0.4 + env * 0.95, 0.0, 1.0) * uGlobalAlpha;
+          gl_FragColor  = vec4(col, a);
         }
       `,
       transparent: true, depthWrite: false,
@@ -599,26 +548,25 @@
 
     const lineStates = lineConnections.map(() => ({
       alive: false, alpha: 0, targetAlpha: 0,
-      birthTime: 0, lifetime: 5 + Math.random() * 10, cooldown: Math.random() * 2,
-      pulseOffset: Math.random(),
+      birthTime: 0, lifetime: 5 + Math.random() * 10,
+      cooldown: Math.random() * 2, pulseOffset: Math.random(),
     }));
 
-    // Write static attributes — read signal color directly from nodeA's material
     const sigColorAttr = lineGeo.getAttribute('aSignalColor');
     for (let c = 0; c < TOTAL_LINES; c++) {
       const po  = lineStates[c].pulseOffset;
       const col = nodes[lineConnections[c].a].material.uniforms.uColor.value;
-      // Both verts of this line get same signal color and offset
       sigColorAttr.setXYZ(c*2,   col.r, col.g, col.b);
       sigColorAttr.setXYZ(c*2+1, col.r, col.g, col.b);
-      lineGeo.getAttribute('aPulseOffset').setX(c*2,    po); lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
+      lineGeo.getAttribute('aPulseOffset').setX(c*2,   po);  lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
       lineGeo.getAttribute('aPulsePhase').setX(c*2,  0.0);   lineGeo.getAttribute('aPulsePhase').setX(c*2+1, 1.0);
     }
-    sigColorAttr.needsUpdate                             = true;
-    lineGeo.getAttribute('aPulseOffset').needsUpdate     = true;
-    lineGeo.getAttribute('aPulsePhase').needsUpdate      = true;
+    sigColorAttr.needsUpdate                         = true;
+    lineGeo.getAttribute('aPulseOffset').needsUpdate = true;
+    lineGeo.getAttribute('aPulsePhase').needsUpdate  = true;
 
-    const logoCircleGeo = new THREE.CircleGeometry(0.55, 256);
+    /* ── Logo ── */
+
     const logoCircleMat = new THREE.ShaderMaterial({
       vertexShader: `
         varying vec2 vPos;
@@ -627,8 +575,8 @@
       fragmentShader: `
         varying vec2 vPos;
         void main() {
-          float dist = length(vPos);
-          float edge = fwidth(dist) * 1.5;
+          float dist  = length(vPos);
+          float edge  = fwidth(dist) * 1.5;
           float alpha = 1.0 - smoothstep(0.55 - edge, 0.55, dist);
           if (alpha < 0.01) discard;
           gl_FragColor = vec4(1.0, 0.851, 0.0, alpha);
@@ -636,7 +584,7 @@
       `,
       transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide, alphaTest: 0.5,
     });
-    const logoCircle = new THREE.Mesh(logoCircleGeo, logoCircleMat);
+    const logoCircle = new THREE.Mesh(new THREE.CircleGeometry(0.55, 256), logoCircleMat);
     scene.add(logoCircle);
 
     function createATexture() {
@@ -664,10 +612,10 @@
     logoA.position.set(0, 0, 0.001);
     scene.add(aurorLogo);
 
-    /* ── Mouse / Drag ── */
+    /* ── Interaction ── */
 
-    const mouse = { screen: new THREE.Vector2(9999, 9999), world: new THREE.Vector3(100, 100, 0), isOver: false, influence: 0 };
-    const drag  = { active: false, velocityX: 0, velocityY: 0, rotationX: 0, rotationY: 0, lastX: 0, lastY: 0 };
+    const mouse     = { screen: new THREE.Vector2(9999, 9999), world: new THREE.Vector3(100, 100, 0), isOver: false, influence: 0 };
+    const drag      = { active: false, velocityX: 0, rotationY: 0, lastX: 0 };
     const raycaster = new THREE.Raycaster();
     const hitSphere = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 16), new THREE.MeshBasicMaterial({ visible: false }));
     scene.add(hitSphere);
@@ -681,24 +629,24 @@
         const dx = e.clientX - drag.lastX;
         drag.velocityX = dx * 0.003;
         drag.rotationY += dx * 0.003;
-        drag.lastX = e.clientX; drag.lastY = e.clientY;
+        drag.lastX = e.clientX;
       }
     });
     canvas.addEventListener('mouseleave', () => { mouse.isOver = false; });
     canvas.addEventListener('mousedown', (e) => {
-      drag.active = true; drag.lastX = e.clientX; drag.lastY = e.clientY;
-      drag.velocityX = 0; drag.velocityY = 0; canvas.style.cursor = 'grabbing';
+      drag.active = true; drag.lastX = e.clientX;
+      drag.velocityX = 0; canvas.style.cursor = 'grabbing';
     });
     window.addEventListener('mouseup', () => { drag.active = false; canvas.style.cursor = 'grab'; });
     canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) { drag.active = true; drag.lastX = e.touches[0].clientX; drag.lastY = e.touches[0].clientY; drag.velocityX = 0; drag.velocityY = 0; }
+      if (e.touches.length === 1) { drag.active = true; drag.lastX = e.touches[0].clientX; drag.velocityX = 0; }
     }, { passive: true });
     canvas.addEventListener('touchmove', (e) => {
       if (drag.active && e.touches.length === 1) {
         const dx = e.touches[0].clientX - drag.lastX;
         drag.velocityX = dx * 0.003;
         drag.rotationY += dx * 0.003;
-        drag.lastX = e.touches[0].clientX; drag.lastY = e.touches[0].clientY;
+        drag.lastX = e.touches[0].clientX;
       }
     }, { passive: true });
     canvas.addEventListener('touchend', () => { drag.active = false; });
@@ -726,7 +674,6 @@
       const time = clock.getElapsedTime();
       scrollProgress += (targetProgress - scrollProgress) * 0.06;
       const p = scrollProgress;
-      const stage = Math.min(Math.floor(p * 5), 4);
 
       const wantLight = p > CONFIG.bgTrigger;
       bgT += ((wantLight ? 1 : 0) - bgT) * 0.045;
@@ -734,13 +681,11 @@
       const isDark = bgT < 0.5;
 
       /* Particles */
-      particleMat.uniforms.uProgress.value = easeOut(p);
-      particleMat.uniforms.uTime.value = time;
-      const countEnd = CONFIG.particleCountEnd || CONFIG.particleCount;
-      particleMat.uniforms.uVisibility.value = Math.min(
-        THREE.MathUtils.lerp(CONFIG.particleCount / COUNT, countEnd / COUNT, easeOut(p)), 1.0
+      particleMat.uniforms.uProgress.value    = easeOut(p);
+      particleMat.uniforms.uTime.value        = time;
+      particleMat.uniforms.uVisibility.value  = Math.min(
+        THREE.MathUtils.lerp(CONFIG.particleCount / COUNT, (CONFIG.particleCountEnd || CONFIG.particleCount) / COUNT, easeOut(p)), 1.0
       );
-
       if (isDark) {
         particleMat.uniforms.uColorInner.value.setHex(CONFIG.goldLight);
         particleMat.uniforms.uColorOuter.value.setHex(0xFFEBB0);
@@ -752,17 +697,16 @@
       }
 
       /* Rotation */
-      const autoRotY = p * Math.PI * 2 * CONFIG.rotationTurns;
       if (!drag.active) {
         drag.velocityX *= 0.95;
         drag.rotationY += drag.velocityX;
       }
-      const euler = new THREE.Euler(0, autoRotY + drag.rotationY, 0, 'YXZ');
-      const quat  = new THREE.Quaternion().setFromEuler(euler);
+      const quat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, p * Math.PI * 2 * CONFIG.rotationTurns + drag.rotationY, 0, 'YXZ')
+      );
       particles.quaternion.copy(quat);
       blueParticles.quaternion.copy(quat);
       nodeGroup.quaternion.copy(quat);
-      linesMesh.quaternion.copy(quat);
       linesMesh.quaternion.copy(quat);
 
       /* Mouse */
@@ -778,14 +722,12 @@
       particleMat.uniforms.uMouse3D.value.copy(mouse.world);
       particleMat.uniforms.uMouseInfluence.value = mouse.influence * 0.15;
 
-      /* Blue particles — fade in at blueIntroStart, same condensing progress */
-      blueMat.uniforms.uProgress.value = easeOut(p);
-      blueMat.uniforms.uTime.value = time;
-      // Blue particles: some visible from start (blueIntroStart=0 effectively), grow in density with scroll
-      const blueVisibility = attr('blue-particle-start', 0.15) + smoothstep(0, 0.5, p) * (1.0 - attr('blue-particle-start', 0.15));
-      blueMat.uniforms.uVisibility.value = blueVisibility;
+      /* Blue particles */
+      blueMat.uniforms.uProgress.value       = easeOut(p);
+      blueMat.uniforms.uTime.value           = time;
+      blueMat.uniforms.uVisibility.value     = attr('blue-particle-start', 0.15) + smoothstep(0, 0.5, p) * (1.0 - attr('blue-particle-start', 0.15));
       if (isDark) {
-        blueMat.uniforms.uColorInner.value.setHex(CONFIG.blueLight);
+        blueMat.uniforms.uColorInner.value.setHex(CONFIG.bluePrimary);
         blueMat.uniforms.uColorOuter.value.setHex(0xA8D8FF);
         blueMat.blending = THREE.AdditiveBlending;
       } else {
@@ -802,18 +744,13 @@
         const d = n.userData;
 
         if (d.isInitial) {
-          // Initial nodes: float in place, condense with particles, but DON'T absorb
-          const lerpT  = easeOut(p);
-          const px = THREE.MathUtils.lerp(d.startPos.x, d.endPos.x, lerpT);
-          const py = THREE.MathUtils.lerp(d.startPos.y, d.endPos.y, lerpT);
-          const pz = THREE.MathUtils.lerp(d.startPos.z, d.endPos.z, lerpT);
+          const lerpT = easeOut(p);
           const drift = (1 - p) * 0.4;
           n.position.set(
-            px + Math.sin(time * 0.3 + d.rand * 20) * drift,
-            py + Math.cos(time * 0.25 + d.rand * 15) * drift,
-            pz
+            THREE.MathUtils.lerp(d.startPos.x, d.endPos.x, lerpT) + Math.sin(time * 0.3 + d.rand * 20) * drift,
+            THREE.MathUtils.lerp(d.startPos.y, d.endPos.y, lerpT) + Math.cos(time * 0.25 + d.rand * 15) * drift,
+            THREE.MathUtils.lerp(d.startPos.z, d.endPos.z, lerpT)
           );
-          // Scale stays at 1 — no absorption
           d.currentScale += (1.0 - d.currentScale) * 0.15;
           n.scale.setScalar(d.currentScale);
           n.material.uniforms.uOpacity.value = Math.min(d.currentScale, 1.0);
@@ -823,27 +760,17 @@
           continue;
         }
 
-        const flyIn  = smoothstep(d.entranceAt, d.arriveAt, p);
-        // No absorption — nodes stay once arrived
-        const ft = easeOut(flyIn);
-        const px = THREE.MathUtils.lerp(d.startPos.x, d.endPos.x, ft);
-        const py = THREE.MathUtils.lerp(d.startPos.y, d.endPos.y, ft);
-        const pz = THREE.MathUtils.lerp(d.startPos.z, d.endPos.z, ft);
-
+        const flyIn    = smoothstep(d.entranceAt, d.arriveAt, p);
+        const ft       = easeOut(flyIn);
         const driftAmt = 0.15 * (1 - flyIn * 0.8);
         n.position.set(
-          px + Math.sin(time * 0.3 + d.rand * 20) * driftAmt,
-          py + Math.cos(time * 0.25 + d.rand * 15) * driftAmt,
-          pz
+          THREE.MathUtils.lerp(d.startPos.x, d.endPos.x, ft) + Math.sin(time * 0.3 + d.rand * 20) * driftAmt,
+          THREE.MathUtils.lerp(d.startPos.y, d.endPos.y, ft) + Math.cos(time * 0.25 + d.rand * 15) * driftAmt,
+          THREE.MathUtils.lerp(d.startPos.z, d.endPos.z, ft)
         );
 
-        // Overshoot pop on arrival, then settle at 1
         let targetScale = 0;
-        if (flyIn > 0.01) {
-          targetScale = flyIn < 0.7
-            ? (flyIn / 0.7) * 1.15
-            : 1.15 - (flyIn - 0.7) / 0.3 * 0.15;
-        }
+        if (flyIn > 0.01) targetScale = flyIn < 0.7 ? (flyIn / 0.7) * 1.15 : 1.15 - (flyIn - 0.7) / 0.3 * 0.15;
 
         d.currentScale += (targetScale - d.currentScale) * 0.15;
         n.scale.setScalar(d.currentScale);
@@ -853,24 +780,17 @@
         n.quaternion.copy(camera.quaternion.clone().premultiply(quat.clone().invert()));
       }
 
-      /* Lines — three clear stages:
-         1. Yellow nodes arrive (~0.02–0.20) → yellow-yellow lines fade in
-         2. Blue nodes arrive  (~0.28–0.46) → blue-blue lines fade in
-         3. Cross connections last           → yellow↔blue lines fade in      */
-      const yellowGA = smoothstep(0.28, 0.40, p) * CONFIG.lineOpacityMax;
-      const blueGA   = smoothstep(0.54, 0.66, p) * CONFIG.lineOpacityMax;
-      const crossGA  = smoothstep(0.72, 0.82, p) * CONFIG.lineOpacityMax;
+      /* Lines */
+      const yellowGA = smoothstep(0.20, 0.40, p) * CONFIG.lineOpacityMax;
+      const blueGA   = smoothstep(0.45, 0.65, p) * CONFIG.lineOpacityMax;
+      const crossGA  = smoothstep(0.75, 0.90, p) * CONFIG.lineOpacityMax;
 
-      // Pass a single uGlobalAlpha for the whole mesh — per-line alpha is handled via aLineAlpha
-      // We encode group-specific global alpha into aLineAlpha instead
       lineMat.uniforms.uGlobalAlpha.value = 1.0;
-      lineMat.uniforms.uTime.value = time;
-      const lPos         = lineGeo.getAttribute('position');
-      const lAlpha       = lineGeo.getAttribute('aLineAlpha');
-      let alive = lineStates.filter(s => s.alive).length;
-      if (Math.floor(time) % 3 === 0 && time % 1 < 0.02) {
-        console.log('[NW] lines alive:', alive, '/', TOTAL_LINES, 'p:', p.toFixed(2), 'yellowGA:', yellowGA.toFixed(2));
-      }
+      lineMat.uniforms.uTime.value        = time;
+
+      const lPos   = lineGeo.getAttribute('position');
+      const lAlpha = lineGeo.getAttribute('aLineAlpha');
+      let alive    = lineStates.filter(s => s.alive).length;
 
       for (let c = 0; c < lineConnections.length; c++) {
         const conn  = lineConnections[c];
@@ -878,13 +798,10 @@
         const nodeB = nodes[conn.b];
         const st    = lineStates[c];
 
-        const groupGA = conn.group === 'yellow' ? yellowGA
-                      : conn.group === 'blue'   ? blueGA
-                      : crossGA;
-
-        const aVis = nodeA.userData.currentScale > 0.95 && p > nodeA.userData.arriveAt;
-        const bVis = nodeB.userData.currentScale > 0.95 && p > nodeB.userData.arriveAt;
-        const ok   = aVis && bVis && groupGA > 0.01;
+        const groupGA = conn.group === 'yellow' ? yellowGA : conn.group === 'blue' ? blueGA : crossGA;
+        const aVis    = nodeA.userData.currentScale > 0.95 && p > nodeA.userData.arriveAt;
+        const bVis    = nodeB.userData.currentScale > 0.95 && p > nodeB.userData.arriveAt;
+        const ok      = aVis && bVis && groupGA > 0.01;
 
         if (st.alive) {
           if (time - st.birthTime > st.lifetime || !ok) {
@@ -892,15 +809,14 @@
           }
         } else if (ok && st.cooldown <= 0 && alive < CONFIG.lineMaxActive) {
           if (Math.random() < 0.04) {
-            st.alive = true; st.birthTime = time; st.lifetime = 4 + Math.random() * 10;
-            st.targetAlpha = 0.5 + Math.random() * 0.5; alive++;
+            st.alive = true; st.birthTime = time;
+            st.lifetime = 4 + Math.random() * 10; st.targetAlpha = 0.5 + Math.random() * 0.5; alive++;
           }
         }
         if (st.cooldown > 0) st.cooldown -= 0.016;
         st.alpha += (st.targetAlpha - st.alpha) * 0.08;
 
         const finalAlpha = st.alpha * groupGA;
-
         if (finalAlpha > 0.005 && ok) {
           lPos.setXYZ(c*2,   nodeA.position.x, nodeA.position.y, nodeA.position.z);
           lPos.setXYZ(c*2+1, nodeB.position.x, nodeB.position.y, nodeB.position.z);
@@ -918,15 +834,13 @@
       aurorLogo.position.set(0, 0, 0);
 
       if (debugEl) {
+        const stage  = Math.min(Math.floor(p * 5), 4);
         const labels = ['Scattered', 'Yellow Nodes', 'Blue Nodes', 'Network', 'Condensed'];
         debugEl.textContent = `Stage ${stage + 1}: ${labels[stage]} | ${Math.round(p * 100)}%`;
       }
 
       renderer.render(scene, camera);
     }
-
-    // helper
-    function fract(x) { return x - Math.floor(x); }
 
     animate();
 
@@ -940,7 +854,7 @@
       renderer.setSize(w, h);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       particleMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
-      blueMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+      blueMat.uniforms.uPixelRatio.value     = renderer.getPixelRatio();
     }
     window.addEventListener('resize', onResize);
     if (typeof ResizeObserver !== 'undefined' && canvasWrap) new ResizeObserver(onResize).observe(canvasWrap);
