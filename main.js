@@ -24,22 +24,23 @@
     }
 
     const CONFIG = {
-      particleCount:     attr('particle-count', 200),
-      particleCountEnd:  attr('particle-count-end', 2500),
+      particleCount:     attr('particle-count', 250),
+      particleCountEnd:  attr('particle-count-end', 1500),
       particleBaseMult:  attr('particle-size', 300),
       particleSquare:    attr('particle-square', 'false') === 'true',
       sphereRadiusStart: attr('sphere-start', 10),
-      sphereRadiusEnd:   attr('sphere-end', 5.5),
-      nodeRadiusStart:   attr('node-radius-start', 70),
-      bgDark:            new THREE.Color(attr('bg-dark', '#0a1628')),
+      sphereRadiusEnd:   attr('sphere-end', 8),
+      nodeRadiusStart:   attr('node-radius-start', 50),
+      bgDark:            new THREE.Color(attr('bg-dark', '#04112B')),
       bgLight:           new THREE.Color(attr('bg-light', '#ffffff')),
-      goldPrimary:       new THREE.Color(attr('color-primary', '#F5A623')).getHex(),
+      goldPrimary:       new THREE.Color(attr('color-primary', '#FFD900')).getHex(),
       goldLight:         new THREE.Color(attr('color-light', '#FFD876')).getHex(),
       bluePrimary:       new THREE.Color(attr('color-blue', '#4ABAFE')).getHex(),
-      lineOpacityMax:    attr('line-opacity', 0.9),
-      lineMaxActive:     attr('line-max', 20),
+      lineOpacityMax:    attr('line-opacity', 0.4),
+      lineMaxActive:     attr('line-max', 10),
+      lineMaxActiveEnd:  attr('line-max-end', 30),
       lineSeed:          attr('line-seed', 42),
-      rotationTurns:     attr('rotation-turns', 1.5),
+      rotationTurns:     attr('rotation-turns', 2),
       bgTrigger:         attr('bg-trigger', 0.12),
       yellowIntroStart:  attr('yellow-intro-start', 0.02),
       blueIntroStart:    attr('blue-intro-start', 0.28),
@@ -55,8 +56,6 @@
     }));
     const NODE_COUNT = Math.max(nodeConfigs.length, 1);
 
-    /* ── Renderer ── */
-
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -66,8 +65,6 @@
 
     const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 200);
     camera.position.set(0, 0, 16);
-
-    /* ── Seeded RNG ── */
 
     function mulberry32(seed) {
       let s = seed;
@@ -81,8 +78,6 @@
     const rng  = mulberry32(CONFIG.lineSeed);
     const rng2 = mulberry32(CONFIG.lineSeed + 100);
     const rng3 = mulberry32(CONFIG.lineSeed + 200);
-
-    /* ── Helpers ── */
 
     function randomInSphere(radius, thickness) {
       const u = Math.random(), v = Math.random(), w = Math.random();
@@ -107,7 +102,7 @@
     /* ── Particles ── */
 
     const COUNT      = Math.max(CONFIG.particleCount, CONFIG.particleCountEnd || CONFIG.particleCount);
-    const endScaleY  = attr('end-scale-y', 0.25);
+    const endScaleY  = attr('end-scale-y', 0.75);
     const startPositions = new Float32Array(COUNT * 3);
     const endPositions   = new Float32Array(COUNT * 3);
     const particleSizes  = new Float32Array(COUNT);
@@ -115,7 +110,9 @@
 
     for (let i = 0; i < COUNT; i++) {
       const sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
-      startPositions[i*3]   = sp.x; startPositions[i*3+1] = sp.y; startPositions[i*3+2] = sp.z;
+      startPositions[i*3]   = sp.x;
+      startPositions[i*3+1] = sp.y * (0.5 + endScaleY * 0.5);
+      startPositions[i*3+2] = sp.z;
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
       endPositions[i*3]   = ep.x;
       endPositions[i*3+1] = ep.y * endScaleY;
@@ -238,7 +235,7 @@
 
     /* ── Blue Particles ── */
 
-    const BLUE_COUNT   = Math.round(COUNT * attr('blue-particle-ratio', 0.4));
+    const BLUE_COUNT   = Math.round(COUNT * attr('blue-particle-ratio', 0.05));
     const blueStartPos = new Float32Array(BLUE_COUNT * 3);
     const blueEndPos   = new Float32Array(BLUE_COUNT * 3);
     const blueSizes    = new Float32Array(BLUE_COUNT);
@@ -246,7 +243,9 @@
 
     for (let i = 0; i < BLUE_COUNT; i++) {
       const sp = randomInSphere(CONFIG.sphereRadiusStart, 0.7);
-      blueStartPos[i*3]   = sp.x; blueStartPos[i*3+1] = sp.y; blueStartPos[i*3+2] = sp.z;
+      blueStartPos[i*3]   = sp.x;
+      blueStartPos[i*3+1] = sp.y * (0.5 + endScaleY * 0.5);
+      blueStartPos[i*3+2] = sp.z;
       const ep = randomInSphere(CONFIG.sphereRadiusEnd, 0.55);
       blueEndPos[i*3]   = ep.x;
       blueEndPos[i*3+1] = ep.y * endScaleY;
@@ -329,7 +328,11 @@
       void main() {
         vec2 center = vUv - 0.5;
         float dist = length(center);
-        float inner = 1.0 - smoothstep(0.12, 0.14, dist);
+        if (dist > 0.5) discard;
+        if (dist <= 0.13) {
+          gl_FragColor = vec4(uColor, 1.0);
+          return;
+        }
         float cycle = fract(uTime * 0.25);
         float p1T = clamp(cycle * 2.5, 0.0, 1.0);
         float p1R = 0.14 + p1T * 0.35;
@@ -339,23 +342,19 @@
         float p2R = 0.14 + p2T * 0.28;
         float p2A = (1.0 - p2T) * 0.28 * step(cycle, 0.5);
         float p2  = smoothstep(p2R - 0.03, p2R - 0.01, dist) * (1.0 - smoothstep(p2R + 0.01, p2R + 0.03, dist));
-        float alpha = (inner * 0.5 + p1 * p1A + p2 * p2A) * uOpacity;
-        if (dist > 0.5) discard;
-        gl_FragColor = vec4(uColor, alpha);
+        float a = (p1 * p1A + p2 * p2A) * uOpacity;
+        if (a < 0.005) discard;
+        gl_FragColor = vec4(uColor, a);
       }
     `;
 
     const nodeFragDot = `
-      uniform float uOpacity;
       uniform vec3 uColor;
       varying vec2 vUv;
       void main() {
-        float dist   = length(vUv - 0.5);
-        float circle = 1.0 - smoothstep(0.30, 0.33, dist);
-        float halo   = pow(1.0 - smoothstep(0.0, 0.5, dist), 5.0) * 0.08;
-        float alpha  = (circle * 0.8 + halo) * uOpacity;
-        if (dist > 0.5) discard;
-        gl_FragColor = vec4(uColor, alpha);
+        float dist = length(vUv - 0.5);
+        if (dist > 0.32) discard;
+        gl_FragColor = vec4(uColor, 1.0);
       }
     `;
 
@@ -365,7 +364,7 @@
     let yellowIdx = 0, blueIdx = 0;
     const yellowNodes   = nodeConfigs.filter(n => n.group !== 'blue');
     const blueNodes     = nodeConfigs.filter(n => n.group === 'blue');
-    const nodeEndScaleY = attr('node-end-scale-y', 0.15);
+    const nodeEndScaleY = attr('node-end-scale-y', 0.5);
 
     for (let i = 0; i < NODE_COUNT; i++) {
       const nc        = nodeConfigs[i] || {};
@@ -394,13 +393,13 @@
       } else if (type === 'dot') {
         mat = new THREE.ShaderMaterial({
           vertexShader: nodeVert, fragmentShader: nodeFragDot,
-          transparent: true, depthWrite: false, side: THREE.DoubleSide,
-          uniforms: { uOpacity: { value: 0 }, uColor: { value: color } }
+          transparent: false, depthWrite: true, side: THREE.DoubleSide,
+          uniforms: { uColor: { value: color } }
         });
       } else {
         mat = new THREE.ShaderMaterial({
           vertexShader: nodeVert, fragmentShader: nodeFragTarget,
-          transparent: true, depthWrite: false, side: THREE.DoubleSide,
+          transparent: true, depthWrite: true, side: THREE.DoubleSide,
           uniforms: { uOpacity: { value: 0 }, uColor: { value: color }, uTime: { value: 0 } }
         });
       }
@@ -475,7 +474,7 @@
     if (srcBlue.length >= 2) addPairs(srcBlue, 'blue', rng3, Math.min(Math.floor(srcBlue.length * 0.8), 12));
 
     if (srcYellow.length > 0 && srcBlue.length > 0) {
-      const crossCount = Math.min(Math.floor(Math.min(srcYellow.length, srcBlue.length) * 0.5), 5);
+      const crossCount = Math.min(Math.floor(Math.min(srcYellow.length, srcBlue.length) * 0.5 * 1.25), 8);
       const usedCross  = new Set();
       for (let c = 0; c < crossCount; c++) {
         let ai, bi, key, attempts = 0;
@@ -527,13 +526,12 @@
         varying float vOffset;
         varying vec3  vSignalColor;
         void main() {
-          vec3  baseCol = vec3(0.55, 0.55, 0.55);
-          float pos     = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
-          float env     = exp(-pow((vPhase - pos) * 14.0, 2.0));
-          float ends    = smoothstep(0.0, 0.06, vPhase) * smoothstep(1.0, 0.94, vPhase);
-          vec3  col     = mix(baseCol, vSignalColor, clamp(env * 3.0, 0.0, 1.0));
-          float a       = clamp(vAlpha * ends * 0.4 + env * 0.95, 0.0, 1.0) * uGlobalAlpha;
-          gl_FragColor  = vec4(col, a);
+          float pos  = mod(uTime * 0.35 + vOffset, 1.2) - 0.1;
+          float env  = exp(-pow((vPhase - pos) * 14.0, 2.0));
+          float ends = smoothstep(0.0, 0.06, vPhase) * smoothstep(1.0, 0.94, vPhase);
+          vec3  col  = mix(vSignalColor, vec3(1.0), clamp(env * 3.0, 0.0, 1.0));
+          float a    = clamp(vAlpha * ends + env * 0.95, 0.0, 1.0) * uGlobalAlpha;
+          gl_FragColor = vec4(col, a);
         }
       `,
       transparent: true, depthWrite: false,
@@ -554,12 +552,15 @@
 
     const sigColorAttr = lineGeo.getAttribute('aSignalColor');
     for (let c = 0; c < TOTAL_LINES; c++) {
-      const po  = lineStates[c].pulseOffset;
-      const col = nodes[lineConnections[c].a].material.uniforms.uColor.value;
+      const po   = lineStates[c].pulseOffset;
+      const conn = lineConnections[c];
+      const col  = conn.group === 'blue'
+        ? new THREE.Color(CONFIG.bluePrimary)
+        : new THREE.Color(CONFIG.goldPrimary);
       sigColorAttr.setXYZ(c*2,   col.r, col.g, col.b);
       sigColorAttr.setXYZ(c*2+1, col.r, col.g, col.b);
-      lineGeo.getAttribute('aPulseOffset').setX(c*2,   po);  lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
-      lineGeo.getAttribute('aPulsePhase').setX(c*2,  0.0);   lineGeo.getAttribute('aPulsePhase').setX(c*2+1, 1.0);
+      lineGeo.getAttribute('aPulseOffset').setX(c*2,   po); lineGeo.getAttribute('aPulseOffset').setX(c*2+1, po);
+      lineGeo.getAttribute('aPulsePhase').setX(c*2,  0.0); lineGeo.getAttribute('aPulsePhase').setX(c*2+1, 1.0);
     }
     sigColorAttr.needsUpdate                         = true;
     lineGeo.getAttribute('aPulseOffset').needsUpdate = true;
@@ -680,7 +681,6 @@
       scene.background.copy(CONFIG.bgDark).lerp(CONFIG.bgLight, bgT);
       const isDark = bgT < 0.5;
 
-      /* Particles */
       particleMat.uniforms.uProgress.value    = easeOut(p);
       particleMat.uniforms.uTime.value        = time;
       particleMat.uniforms.uVisibility.value  = Math.min(
@@ -696,7 +696,6 @@
         particleMat.blending = THREE.NormalBlending;
       }
 
-      /* Rotation */
       if (!drag.active) {
         drag.velocityX *= 0.95;
         drag.rotationY += drag.velocityX;
@@ -709,7 +708,6 @@
       nodeGroup.quaternion.copy(quat);
       linesMesh.quaternion.copy(quat);
 
-      /* Mouse */
       const mouseGate = smoothstep(0.7, 0.85, p);
       if (mouse.isOver && !drag.active && mouseGate > 0.01) {
         raycaster.setFromCamera(mouse.screen, camera);
@@ -722,10 +720,9 @@
       particleMat.uniforms.uMouse3D.value.copy(mouse.world);
       particleMat.uniforms.uMouseInfluence.value = mouse.influence * 0.15;
 
-      /* Blue particles */
       blueMat.uniforms.uProgress.value       = easeOut(p);
       blueMat.uniforms.uTime.value           = time;
-      blueMat.uniforms.uVisibility.value     = attr('blue-particle-start', 0.15) + smoothstep(0, 0.5, p) * (1.0 - attr('blue-particle-start', 0.15));
+      blueMat.uniforms.uVisibility.value     = attr('blue-particle-start', 0.2) + smoothstep(0, 0.5, p) * (1.0 - attr('blue-particle-start', 0.2));
       if (isDark) {
         blueMat.uniforms.uColorInner.value.setHex(CONFIG.bluePrimary);
         blueMat.uniforms.uColorOuter.value.setHex(0xA8D8FF);
@@ -753,7 +750,7 @@
           );
           d.currentScale += (1.0 - d.currentScale) * 0.15;
           n.scale.setScalar(d.currentScale);
-          n.material.uniforms.uOpacity.value = Math.min(d.currentScale, 1.0);
+          if (n.material.uniforms.uOpacity) n.material.uniforms.uOpacity.value = Math.min(d.currentScale, 1.0);
           if (n.material.uniforms.uTime) n.material.uniforms.uTime.value = time + d.rand * 6.28;
           n.visible = d.currentScale > 0.01;
           n.quaternion.copy(camera.quaternion.clone().premultiply(quat.clone().invert()));
@@ -774,7 +771,7 @@
 
         d.currentScale += (targetScale - d.currentScale) * 0.15;
         n.scale.setScalar(d.currentScale);
-        n.material.uniforms.uOpacity.value = Math.min(d.currentScale, 1.0);
+        if (n.material.uniforms.uOpacity) n.material.uniforms.uOpacity.value = Math.min(d.currentScale, 1.0);
         if (n.material.uniforms.uTime) n.material.uniforms.uTime.value = time + d.rand * 6.28;
         n.visible = d.currentScale > 0.01;
         n.quaternion.copy(camera.quaternion.clone().premultiply(quat.clone().invert()));
@@ -784,6 +781,10 @@
       const yellowGA = smoothstep(0.20, 0.40, p) * CONFIG.lineOpacityMax;
       const blueGA   = smoothstep(0.45, 0.65, p) * CONFIG.lineOpacityMax;
       const crossGA  = smoothstep(0.75, 0.90, p) * CONFIG.lineOpacityMax;
+
+      /* lineMax: low during yellow-only / blue-only, rises to lineMaxActiveEnd once mixed stage begins */
+      const mixProgress = smoothstep(0.75, 0.95, p);
+      const lineMax = Math.round(THREE.MathUtils.lerp(CONFIG.lineMaxActive, CONFIG.lineMaxActiveEnd, mixProgress));
 
       lineMat.uniforms.uGlobalAlpha.value = 1.0;
       lineMat.uniforms.uTime.value        = time;
@@ -807,7 +808,7 @@
           if (time - st.birthTime > st.lifetime || !ok) {
             st.alive = false; st.targetAlpha = 0; st.cooldown = 1 + Math.random() * 3; alive--;
           }
-        } else if (ok && st.cooldown <= 0 && alive < CONFIG.lineMaxActive) {
+        } else if (ok && st.cooldown <= 0 && alive < (conn.group === 'cross' ? lineMax * 2 : lineMax)) {
           if (Math.random() < 0.04) {
             st.alive = true; st.birthTime = time;
             st.lifetime = 4 + Math.random() * 10; st.targetAlpha = 0.5 + Math.random() * 0.5; alive++;
@@ -816,20 +817,19 @@
         if (st.cooldown > 0) st.cooldown -= 0.016;
         st.alpha += (st.targetAlpha - st.alpha) * 0.08;
 
-        const finalAlpha = st.alpha * groupGA;
-        if (finalAlpha > 0.005 && ok) {
+        const show = st.alpha > 0.005 && ok;
+        if (show) {
           lPos.setXYZ(c*2,   nodeA.position.x, nodeA.position.y, nodeA.position.z);
           lPos.setXYZ(c*2+1, nodeB.position.x, nodeB.position.y, nodeB.position.z);
         } else {
           lPos.setXYZ(c*2, 0,0,0); lPos.setXYZ(c*2+1, 0,0,0);
         }
-        lAlpha.setX(c*2, finalAlpha); lAlpha.setX(c*2+1, finalAlpha);
+        lAlpha.setX(c*2, st.alpha); lAlpha.setX(c*2+1, st.alpha);
       }
 
       lPos.needsUpdate   = true;
       lAlpha.needsUpdate = true;
 
-      /* Logo */
       aurorLogo.quaternion.copy(camera.quaternion);
       aurorLogo.position.set(0, 0, 0);
 
@@ -843,8 +843,6 @@
     }
 
     animate();
-
-    /* ── Resize ── */
 
     function onResize() {
       const w = canvasWrap?.clientWidth || window.innerWidth;
