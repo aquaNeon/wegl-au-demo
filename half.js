@@ -1,3 +1,4 @@
+
 (function() {
   'use strict';
 
@@ -45,6 +46,7 @@
       lineMaxActiveEnd:  attr('line-max-end', 30),
       lineSeed:          attr('line-seed', 42),
       rotationTurns:     attr('rotation-turns', 2),
+      // Color change at new scroll 12% → remapScroll(0.12) = 0.37 + 0.12*0.63 ≈ 0.4456
       bgTrigger:         0.4456,
       yellowIntroStart:  attr('yellow-intro-start', 0.02),
       blueIntroStart:    attr('blue-intro-start', 0.28),
@@ -435,7 +437,8 @@
         Math.sin(angle2) * radius2 * (0.6 + Math.random() * 0.5)
       );
 
-
+      // Yellow nodes are fully visible at load (p starts at 0.37, past their arriveAt).
+      // Pre-set scale to 1 so they don't lerp in on page load.
       const prewarmed = !isBlue && (isInitial || (introBase + stagger + 0.18) <= REMAP_START);
       mesh.userData = {
         startPos: sp, endPos: ep, size,
@@ -550,11 +553,19 @@
     const linesMesh = new THREE.LineSegments(lineGeo, lineMat);
     scene.add(linesMesh);
 
-    const lineStates = lineConnections.map(() => ({
-      alive: false, alpha: 0, targetAlpha: 0,
-      birthTime: 0, lifetime: 5 + Math.random() * 10,
-      cooldown: Math.random() * 2, pulseOffset: Math.random(),
-    }));
+    const lineStates = lineConnections.map((conn) => {
+      const preSpawn = conn.group === 'yellow';
+      const ta = preSpawn ? 0.5 + Math.random() * 0.5 : 0;
+      return {
+        alive:       preSpawn,
+        alpha:       ta,
+        targetAlpha: ta,
+        birthTime:   preSpawn ? -(Math.random() * 8) : 0, // stagger so they don't all die together
+        lifetime:    5 + Math.random() * 10,
+        cooldown:    preSpawn ? 0 : Math.random() * 2,
+        pulseOffset: Math.random(),
+      };
+    });
 
     const sigColorAttr = lineGeo.getAttribute('aSignalColor');
     for (let c = 0; c < TOTAL_LINES; c++) {
@@ -668,7 +679,9 @@
     function updateScroll() {
       if (!section) return;
       const rect = section.getBoundingClientRect();
+      // raw: 0→1 over the full scroll distance
       const raw = Math.max(0, Math.min(1, -rect.top / (section.scrollHeight - window.innerHeight)));
+      // remap so raw=0 → p=0.37, raw=1 → p=1.0
       targetProgress = remapScroll(raw);
     }
     window.addEventListener('scroll', updateScroll, { passive: true });
@@ -686,6 +699,7 @@
       const p = scrollProgress;
 
       // Background: dark→light triggers at new 12% of scroll
+      // remapScroll(0.12) ≈ 0.4456 in old-p space
       const wantLight = p > CONFIG.bgTrigger;
       bgT += ((wantLight ? 1 : 0) - bgT) * 0.045;
       scene.background.copy(CONFIG.bgDark).lerp(CONFIG.bgLight, bgT);
@@ -788,7 +802,7 @@
       }
 
       /* Lines */
-      const yellowGA = smoothstep(0.20, 0.40, p) * CONFIG.lineOpacityMax;
+      const yellowGA = smoothstep(0.37, 0.42, p) * CONFIG.lineOpacityMax;
       const blueGA   = smoothstep(0.45, 0.65, p) * CONFIG.lineOpacityMax;
       const crossGA  = smoothstep(0.75, 0.90, p) * CONFIG.lineOpacityMax;
 
@@ -809,8 +823,10 @@
         const st    = lineStates[c];
 
         const groupGA = conn.group === 'yellow' ? yellowGA : conn.group === 'blue' ? blueGA : crossGA;
-        const aVis    = nodeA.userData.currentScale > 0.95 && p > nodeA.userData.arriveAt;
-        const bVis    = nodeB.userData.currentScale > 0.95 && p > nodeB.userData.arriveAt;
+        // Yellow nodes are pre-warmed to scale=1 at load
+        const isYellow = conn.group === 'yellow';
+        const aVis    = nodeA.userData.currentScale > 0.95 && (isYellow || p > nodeA.userData.arriveAt);
+        const bVis    = nodeB.userData.currentScale > 0.95 && (isYellow || p > nodeB.userData.arriveAt);
         const ok      = aVis && bVis && groupGA > 0.01;
 
         if (st.alive) {
