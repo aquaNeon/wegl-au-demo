@@ -22,9 +22,6 @@
     }
 
     // ── Scroll remap ──────────────────────────────────────────────────────────
-    // Raw scroll 0→1 maps to old-animation 0.37→1.0.
-    // All thresholds in this file use "old" p values, so the existing
-    // stage logic is untouched — we only shift the input.
     const REMAP_START = 0.37;
     function remapScroll(raw) {
       return REMAP_START + raw * (1.0 - REMAP_START);
@@ -48,7 +45,6 @@
       lineMaxActiveEnd:  attr('line-max-end', 30),
       lineSeed:          attr('line-seed', 42),
       rotationTurns:     attr('rotation-turns', 2),
-      // Color change at new scroll 12% → remapScroll(0.12) = 0.37 + 0.12*0.63 ≈ 0.4456
       bgTrigger:         0.4456,
       yellowIntroStart:  attr('yellow-intro-start', 0.02),
       blueIntroStart:    attr('blue-intro-start', 0.28),
@@ -439,8 +435,7 @@
         Math.sin(angle2) * radius2 * (0.6 + Math.random() * 0.5)
       );
 
-      // Yellow nodes are fully visible at load (p starts at 0.37, past their arriveAt).
-      // Pre-set scale to 1 so they don't lerp in on page load.
+
       const prewarmed = !isBlue && (isInitial || (introBase + stagger + 0.18) <= REMAP_START);
       mesh.userData = {
         startPos: sp, endPos: ep, size,
@@ -673,9 +668,7 @@
     function updateScroll() {
       if (!section) return;
       const rect = section.getBoundingClientRect();
-      // raw: 0→1 over the full scroll distance
       const raw = Math.max(0, Math.min(1, -rect.top / (section.scrollHeight - window.innerHeight)));
-      // remap so raw=0 → p=0.37, raw=1 → p=1.0
       targetProgress = remapScroll(raw);
     }
     window.addEventListener('scroll', updateScroll, { passive: true });
@@ -693,7 +686,6 @@
       const p = scrollProgress;
 
       // Background: dark→light triggers at new 12% of scroll
-      // remapScroll(0.12) ≈ 0.4456 in old-p space
       const wantLight = p > CONFIG.bgTrigger;
       bgT += ((wantLight ? 1 : 0) - bgT) * 0.045;
       scene.background.copy(CONFIG.bgDark).lerp(CONFIG.bgLight, bgT);
